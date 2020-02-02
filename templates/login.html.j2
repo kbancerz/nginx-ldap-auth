@@ -1,0 +1,12 @@
+% if defined('error_msg'):
+Error: {{ error_msg }}<br>
+% end
+<form action="/login" method="post">
+    Username: <input name="username" type="text" \\
+% if defined('username'):
+value="{{ username }}"\\
+% end
+    /><br>
+    Password: <input name="password" type="password"/><br>
+    <input value="Login" type="submit" />
+</form>
