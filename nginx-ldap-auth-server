@@ -8,6 +8,7 @@ import random
 import time
 from collections import namedtuple
 from contextlib import contextmanager
+from urllib.parse import urlparse
 
 from bottle import abort, redirect, request, response, route, run, \
     static_file, template
@@ -129,7 +130,7 @@ def ldap_get_group_membership(username):
 
 @route('/static/<filename>', method='GET')
 def server_static(filename):
-    return static_file(filename, root=config['login_page']['static_root'])
+    return static_file(filename, root=config['pages']['static_root'])
 
 
 @route('/auth', method='GET')
@@ -201,10 +202,16 @@ def login():
 def no_authorization():
     cookie_session = config['session']['cookie_session']
     cookie_secret = config['session']['cookie_secret']
+    cookie_redirect = config['session']['cookie_redirect']
     cookie = request.get_cookie(cookie_session, secret=cookie_secret)
 
     user = cookie.split(':', 2)[0] if cookie else None
-    host = request.get_header('host')
+    redirection = request.get_cookie(cookie_redirect)
+    if redirection:
+        parsed = urlparse(redirection)
+        host = parsed.netloc
+    else:
+        host = None
 
     return template(config['pages']['noauth_template'], host=host, user=user)
 
