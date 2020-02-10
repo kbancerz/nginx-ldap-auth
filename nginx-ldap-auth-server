@@ -200,12 +200,12 @@ def login():
 
 @route('/401', method='GET')
 def error_401():
-    return template(config['login_file']['401_template'])
+    return template(config['pages']['401_template'])
 
 
 @route('/403', method='GET')
 def error_403():
-    return template(config['login_file']['403_template'])
+    return template(config['pages']['403_template'])
 
 
 @click.group()
