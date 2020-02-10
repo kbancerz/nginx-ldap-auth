@@ -124,7 +124,7 @@ def ldap_get_group_membership(username):
         cache_entry = GroupsCacheEntry(groups, now)
         groups_cache[username] = cache_entry
 
-    return cache_entry
+    return cache_entry.entry
 
 
 @route('/static/<filename>', method='GET')
