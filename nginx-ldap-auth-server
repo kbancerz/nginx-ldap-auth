@@ -143,7 +143,7 @@ def auth():
         return abort(401, 'Unauthenticated')
 
     username, timestamp  = cookie.rsplit(':', 1)
-    if timestamp + cookie_max_age < int(time.time()):
+    if int(timestamp) + cookie_max_age < int(time.time()):
         return abort(401, 'Unauthenticated')
 
     hdr_allowed_users = request.get_header('X-LDAP-AUTH-USERS')
