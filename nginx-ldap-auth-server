@@ -155,7 +155,7 @@ def auth():
             return abort(403, 'Unauthorized')
 
     if hdr_allowed_groups:
-        allowed_groups = {x.strip() for x in hdr_allowed_users.split(';')}
+        allowed_groups = {x.strip() for x in hdr_allowed_groups.split(';')}
         user_groups = ldap_get_group_membership(username)
         if not allowed_groups.intersection(user_groups):
             return abort(403, 'Unauthorized')
