@@ -46,8 +46,7 @@ config = {
     },
     'pages': {
         'login_template': './templates/login.html.j2',
-        '401_template': './templates/401.html.j2',
-        '403_template': './templates/403.html.j2',
+        'noauth_template': './templates/noauth.html.j2',
         'static_root': './static',
         'fallback_redirect': 'https://internal.example.com',
     },
@@ -198,14 +197,16 @@ def login():
     return redirect(next_url)
 
 
-@route('/401', method='GET')
-def error_401():
-    return template(config['pages']['401_template'])
+@route('/noauth', method='GET')
+def no_authorization():
+    cookie_session = config['session']['cookie_session']
+    cookie_secret = config['session']['cookie_secret']
+    cookie = request.get_cookie(cookie_session, secret=cookie_secret)
 
+    user = cookie.split(':', 2)[0] if cookie else None
+    host = request.get_header('host')
 
-@route('/403', method='GET')
-def error_403():
-    return template(config['pages']['403_template'])
+    return template(config['pages']['noauth_template'], host=host, user=user)
 
 
 @click.group()
