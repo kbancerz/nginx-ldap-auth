@@ -150,18 +150,23 @@ def auth():
     hdr_allowed_users = request.get_header('X-LDAP-AUTH-USERS')
     hdr_allowed_groups = request.get_header('X-LDAP-AUTH-GROUPS')
 
+    # if user is not on the list of allowed users, then check groups
+    # if user is not assigned to any of the allowed groups, then return 403
+
     if hdr_allowed_users:
         allowed_users = {x.strip() for x in hdr_allowed_users.split(';')}
-        if username not in allowed_users:
-            return abort(403, 'Unauthorized')
+        if username in allowed_users:
+            return ''
 
     if hdr_allowed_groups:
         allowed_groups = {x.strip() for x in hdr_allowed_groups.split(';')}
         user_groups = ldap_get_group_membership(username)
-        if not allowed_groups.intersection(user_groups):
-            return abort(403, 'Unauthorized')
+        if allowed_groups.intersection(user_groups):
+            return ''
+    else:
+        return ''
 
-    return ''
+    return abort(403, 'Unauthorized')
 
 
 @route('/login', method=('GET', 'POST'))
@@ -213,7 +218,11 @@ def no_authorization():
     else:
         host = None
 
-    return template(config['pages']['noauth_template'], host=host, user=user)
+    noauth_template = config['pages']['noauth_template']
+    fallback_redirect = config['pages']['fallback_redirect']
+
+    return template(
+        noauth_template, host=host, user=user, home=fallback_redirect)
 
 
 @click.group()
