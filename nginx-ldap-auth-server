@@ -128,7 +128,7 @@ def ldap_get_group_membership(username):
     return cache_entry.entry
 
 
-@route('/static/<filename>', method='GET')
+@route('/static/<filename:path>', method='GET')
 def server_static(filename):
     return static_file(filename, root=config['pages']['static_root'])
 
