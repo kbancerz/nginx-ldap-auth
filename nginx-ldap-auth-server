@@ -234,6 +234,26 @@ def no_authorization():
         noauth_template, host=host, user=user, home=fallback_redirect)
 
 
+def check_consistency(template, checked, path=None):
+    global config
+    path = path or []
+    checked_keys = checked.keys()
+    template_keys = template.keys()
+
+    for key in template_keys:
+        if key not in checked_keys:
+            path.append(key)
+            click.echo(f'Missing {".".join(path)}')
+            return False
+
+        value = template[key]
+        if (isinstance(value, dict) and
+                not check_consistency(value, checked[key], path + [key])):
+            return False
+
+    return True
+
+
 @click.group()
 @click.option('--config-file', required=True, type=click.Path(),
               help='configuration file')
@@ -272,8 +292,13 @@ def run_server(ctx, host, port):
 
     config_file = ctx.obj['config_file']
     with open(config_file, 'r') as f:
-        config = json.load(f)
+        loaded_config = json.load(f)
 
+    if not check_consistency(config, loaded_config):
+        click.echo('Incorrect config loaded!')
+        exit(1)
+
+    config = loaded_config
     run(host=host, port=port)
 
 
