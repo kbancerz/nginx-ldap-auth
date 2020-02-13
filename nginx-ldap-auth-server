@@ -51,6 +51,9 @@ config = {
         'static_root': './static',
         'fallback_redirect': 'https://internal.example.com',
     },
+    'ingress': {
+        'ignored_addresses': [],
+    },
 }
 
 groups_cache = {}
@@ -135,6 +138,11 @@ def server_static(filename):
 
 @route('/auth', method='GET')
 def auth():
+    ignored_ingress = config['ingress']['ignored_addresses']
+    ingress = request.get_header('X-LDAP-AUTH-INGRESS')
+    if ingress in ignored_ingress:
+        return ''
+
     cookie_session = config['session']['cookie_session']
     cookie_secret = config['session']['cookie_secret']
     cookie_max_age = int(config['session']['cookie_max_age'])
