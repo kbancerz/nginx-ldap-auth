@@ -203,6 +203,15 @@ def login():
     return redirect(next_url)
 
 
+@route('/logout', method=('GET', 'POST'))
+def logout():
+    cookie_session = config['session']['cookie_session']
+    cookie_domain = config['session']['cookie_domain']
+    response.delete_cookie(cookie_session, domain=cookie_domain, path='/')
+
+    return redirect('/login')
+
+
 @route('/noauth', method='GET')
 def no_authorization():
     cookie_session = config['session']['cookie_session']
