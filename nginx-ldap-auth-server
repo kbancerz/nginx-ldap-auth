@@ -177,7 +177,7 @@ def auth():
     return abort(403, 'Unauthorized')
 
 
-@route('/login', method=('GET', 'POST'))
+@route('/', method=('GET', 'POST'))
 def login():
     template_file = config['pages']['login_template']
 
@@ -217,7 +217,7 @@ def logout():
     cookie_domain = config['session']['cookie_domain']
     response.delete_cookie(cookie_session, domain=cookie_domain, path='/')
 
-    return redirect('/login')
+    return redirect('/')
 
 
 @route('/noauth', method='GET')
