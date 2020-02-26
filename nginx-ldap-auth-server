@@ -46,9 +46,9 @@ config = {
         'cookie_max_age': DEFAULT_SESSION_EXPIRATION,
     },
     'pages': {
-        'login_template': './templates/login.html.j2',
-        'noauth_template': './templates/noauth.html.j2',
-        'static_root': './static',
+        'login_template': './pages/templates/login.html.j2',
+        'noauth_template': './pages/templates/noauth.html.j2',
+        'static_root': './pages/static',
         'fallback_redirect': 'https://internal.example.com',
     },
     'ingress': {
