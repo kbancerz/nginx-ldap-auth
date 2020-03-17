@@ -19,6 +19,7 @@ import click
 import ldap
 
 
+DEFAULT_CONFIG_FILE = 'config.json'
 DEFAULT_SECRET_LENGTH = 32
 DEFAULT_SESSION_EXPIRATION = 86400  # session lasts 1 day by default
 GROUPS_CACHE_MAX_AGE = 300  # cache user's groups query for 5 minutes
@@ -288,10 +289,10 @@ def check_consistency(template, checked, path=None):
 
 
 @click.group()
-@click.option('--config-file', required=True, type=click.Path(),
+@click.option('--config-file', required=False, type=click.Path(),
               help='configuration file')
 @click.pass_context
-def nginx_ldap_auth(ctx, config_file):
+def nginx_ldap_auth(ctx, config_file=None):
     """
     nginx LDAP Authentication Server
     """
@@ -308,9 +309,14 @@ def get_sample_config(ctx, json_indent):
     """
     global config
 
+    config_json = json.dumps(config, indent=json_indent)
+
     config_file = ctx.obj['config_file']
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=json_indent)
+    if config_file:
+        with open(config_file, 'w') as f:
+            f.write(config_json)
+    else:
+        click.echo(config_json)
 
 
 @nginx_ldap_auth.command()
@@ -323,7 +329,7 @@ def run_server(ctx, host, port):
     """
     global config
 
-    config_file = ctx.obj['config_file']
+    config_file = ctx.obj['config_file'] or DEFAULT_CONFIG_FILE
     with open(config_file, 'r') as f:
         loaded_config = json.load(f)
 
