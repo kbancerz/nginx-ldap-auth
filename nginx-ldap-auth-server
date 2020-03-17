@@ -123,6 +123,7 @@ def ldap_get_group_membership(username):
                 user_base_dn, ldap.SCOPE_SUBTREE, ldap_filter)
             user_dn = result[0][0]
 
+            # TODO(kbancerz): parametrize this query
             # find user's groups based on DN
             ldap_filter = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
             result = lc.search_s(
