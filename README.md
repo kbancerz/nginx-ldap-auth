@@ -102,12 +102,12 @@ location /__auth {
 }
 
 location @access_error401 {
-        add_header Set-Cookie "EXAMPLE_COM_REDIRECT=$scheme://$http_host$request_uri;Domain=.ecc.technology;Path=/";
+        add_header Set-Cookie "EXAMPLE_COM_REDIRECT=$scheme://$http_host$request_uri;Domain=.example.com;Path=/";
         return 302 http://access.example.com/;
 }
 
 location @access_error403 {
-        add_header Set-Cookie "EXAMPLE_COM_REDIRECT=$scheme://$http_host$request_uri;Domain=.ecc.technology;Path=/";
+        add_header Set-Cookie "EXAMPLE_COM_REDIRECT=$scheme://$http_host$request_uri;Domain=.example.com;Path=/";
         return 302 http://access.example.com/noauth;
 }
 ```
@@ -130,7 +130,7 @@ The second location is a generic response to a 401 status returned by the auth s
 
 Last location is a response to a 403 - unauthorized error - in this case user is sent to the error page on the auth server. On this page optional information can be shown, so that the user can - for example - contact administrators and request access.
 
-Please notice, that error locations set the redirection cookie, so **make sure**, that the name (here _EXAMPLE_COM_REDIRECT_) matches the one set in the auth server configuration - **cookie_redirect**.
+Please notice, that error locations set the redirection cookie, so **make sure**, that the name (here _EXAMPLE_COM_REDIRECT_) matches the one set in the auth server configuration - **cookie_redirect**. The same goes for the domain (here: _.example.com_), **make sure** it matches **cookie_domain** parameter.
 
 Both login and 403 error page need to be accessible to the end-users - in this example they are proxied and available at http://access.example.com.
 
