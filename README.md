@@ -2,7 +2,7 @@ nginx-ldap-auth: LDAP Authentication Page
 ----
 This solution enables granular access control to proxied nginx sites, based on LDAP directory data.
 
-###### Features
+### Features
 * LDAP-based authentication
 * Access control based on LDAP group membership
 * Custom login page - instead of basic authentication popup
@@ -25,54 +25,60 @@ Generate a sample config file:
 docker run --rm nginx-ldap-auth ./nginx-ldap-auth-server get-sample-config > config.json
 ```
 
-Maintain the file as described in 'Configuration' section and run the server:
+Maintain the file as described in 'Configuration' section and create a docker container:
 
 ```
 docker run --rm -p 8088:8088 -v ./config.json:/usr/src/app/config.json nginx-ldap-auth
 ```
 
-This will open 8088 port.
+or alternatively use **docker-compose**:
+
+```
+docker-compose up -d
+```
+
+This will open authentication server on port 8088.
 
 Server Configuration
 ----
 Server requires configuration file to be maintained. It is divided into several different sections:
 
-###### LDAP
-* host (e.g. "ldap.example.com") - LDAP server host
-* port (e.g. 389) - LDAP server port
-* username (e.g. "admin") - LDAP read-only account
-* password (e.g. "password") - LDAP account password
-* user_attr (e.g. "uid") - LDAP user attribute used as login during authentication
-* user_base_dn (e.g. "ou=users,dc=example,dc=com") - base DN for user search
-* group_base_dn (e.g. "ou=groups,dc=example,dc=com") - base DN for group search
-* group_cache_max_age (e.g. 300) - server caches list of groups of which an account used for authentication is member of, set this to change invalidation period (in seconds)
+#### LDAP
+* **host** (e.g. _"ldap.example.com"_) - LDAP server host
+* **port** (e.g. _389_) - LDAP server port
+* **username** (e.g. _"admin"_) - LDAP read-only account
+* **password** (e.g. _"password"_) - LDAP account password
+* **user_attr** (e.g. _"uid"_) - LDAP user attribute used as login during authentication
+* **user_base_dn** (e.g. _"ou=users,dc=example,dc=com"_) - base DN for user search
+* **group_base_dn** (e.g. _"ou=groups,dc=example,dc=com"_) - base DN for group search
+* **group_cache_max_age** (e.g. _300_) - server caches list of groups of which an account used for authentication is member of, set this to change invalidation period (in seconds)
 
 
-###### Session
-* cookie_session (e.g. "EXAMPLE_COM_SSO") - name of session cookie
-* cookie_redirect (e.g. EXAMPLE_COM_REDIRECT") - name of redirection cookie (holds referrer URL)
-* cookie_domain (e.g. ".example.com") - cookie domain - use it to change the scope of the session cookie
-* cookie_secret (e.g. "4ZRL5a0emNFTMI7wn1PBe1JWXlZ59C5D") - secret, that is used to encrypt session information
-* cookie_max_age (e.g. 86400) - max age of the cookie:
+#### Session
+* **cookie_session** (e.g. _"EXAMPLE_COM_SSO"_) - name of session cookie
+* **cookie_redirect** (e.g. _"EXAMPLE_COM_REDIRECT"_) - name of redirection cookie (holds referrer URL)
+* **cookie_domain** (e.g. _".example.com"_) - cookie domain - use it to change the scope of the session cookie
+* **cookie_secret** (e.g. _"4ZRL5a0emNFTMI7wn1PBe1JWXlZ59C5D"_) - secret, that is used to encrypt session information
+* **cookie_max_age** (e.g. _86400_) - max age of the cookie:
     * if a positive number - treated as a number of seconds
     * if zero or a negative number - treated as a number of full days of validity before expiring at 23:59:59 - e.g. if set to -1, then a cookie created at 15:00 will expire at midnight of the next day (one full day + 9h)
 
-###### Pages
-* login_template (e.g. "./pages/templates/login.html.j2") - path to login page template (Bottle template language)
-* noauth_template (e.g. "./pages/templates/noauth.html.j2") - path to 403 page template (Bottle template language)
-* static_root (e.g. "./pages/static") - path to static files root folder
-* fallback_redirect (e.g. "https://internal.example.com") - redirection fallback address - if redirection cookie is not set (e.g. login page was accessed directly), a user will be redirected to this address after successfully logging in
+#### Pages
+* **login_template** (e.g. _"./pages/templates/login.html.j2"_) - path to login page template (Bottle template language)
+* **noauth_template** (e.g. _"./pages/templates/noauth.html.j2"_) - path to 403 page template (Bottle template language)
+* **static_root** (e.g. _"./pages/static"_) - path to static files root folder
+* **fallback_redirect** (e.g. _"https://internal.example.com"_) - redirection fallback address - if redirection cookie is not set (e.g. login page was accessed directly), a user will be redirected to this address after successfully logging in
 
-###### Ingress
-* ignored_addresses (e.g. ["192.168.0.1"]) - list of source hosts, for which authentication should not be checked (e.g. when accessed from within an internal network/VPN/etc.)
+#### Ingress
+* **ignored_addresses** (e.g. _["192.168.0.1"]_) - list of source hosts, for which authentication should not be checked (e.g. when accessed from within an internal network/VPN/etc.)
 
 nginx Configuration
 ----
 When the server is running, nginx needs to be configured to utilize authentication service provided.
 
-Sample configuration snippets are presented below - each can be placed as a separate config file in /etc/nginx directory and referred to with **include** clause.
+Sample configuration snippets are presented below - each can be placed as a separate config file in _/etc/nginx_ directory and referred to with **include** clause.
 
-###### Enable access control
+### Enable access control
 
 For each **server** configuration clause a set of generic locations needs to be defined:
 
@@ -128,7 +134,7 @@ Please notice, that error locations set the redirection cookie, so **make sure**
 
 Both login and 403 error page need to be accessible to the end-users - in this example they are proxied and available at http://access.example.com.
 
-###### Access to resources
+### Access to resources
 
 Access control is enabled by adding configuration a snippet to the **server** clause:
 
@@ -170,7 +176,7 @@ In this sample configuration access to this internal site will be granted only t
 * _User2_
 * any member of the _Internal Users_ group
 
-###### Caching
+### Caching
 
 To limit performance hit, authentication server responses are cached by nginx - this is set in the **/__auth** location definition. Caching requires setting up the file system caching location - to do this, set it in the **nginx.conf** file, **http** section by adding e.g.:
 ```
