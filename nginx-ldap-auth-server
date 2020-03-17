@@ -118,7 +118,7 @@ def ldap_get_group_membership(username):
             group_base_dn = config['ldap']['group_base_dn']
 
             # get user's DN
-            ldap_filter = f'(mail={username})'
+            ldap_filter = f'({config["ldap"]["user_attr"]}={username})'
             result = lc.search_s(
                 user_base_dn, ldap.SCOPE_SUBTREE, ldap_filter)
             user_dn = result[0][0]
