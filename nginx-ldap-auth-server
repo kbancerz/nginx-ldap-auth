@@ -96,8 +96,11 @@ def ldap_check_authentication(username, password):
 
     # TODO(kbancerz): change to bind attempt?
     # get base64-encoded hash of the password from directory
-    ldap_password = base64.b64decode(
-        search_result[0][1]['userPassword'][0][5:])
+    ldap_password_encoded = search_result[0][1].get('userPassword')
+    if ldap_password_encoded is None:
+        return False
+
+    ldap_password = base64.b64decode(ldap_password_encoded[0][5:])
     received_password = hashlib.sha1(password.encode('utf-8')).digest()
     if not hmac.compare_digest(ldap_password, received_password):
         click.echo(f'Incorrect credentials: {username}')
