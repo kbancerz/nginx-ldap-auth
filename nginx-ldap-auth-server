@@ -179,8 +179,12 @@ def auth():
     hdr_allowed_users = request.get_header('X-LDAP-AUTH-USERS')
     hdr_allowed_groups = request.get_header('X-LDAP-AUTH-GROUPS')
 
+    # if there are no allowed users or groups defined, anyone can access
     # if user is not on the list of allowed users, then check groups
     # if user is not assigned to any of the allowed groups, then return 403
+
+    if not hdr_allowed_users and not hdr_allowed_groups:
+        return ''
 
     if hdr_allowed_users:
         allowed_users = {x.strip() for x in hdr_allowed_users.split(';')}
@@ -192,8 +196,6 @@ def auth():
         user_groups = ldap_get_group_membership(username)
         if allowed_groups.intersection(user_groups):
             return ''
-    else:
-        return ''
 
     return abort(403, 'Unauthorized')
 
