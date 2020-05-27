@@ -102,7 +102,7 @@ def server_static(filename):
 @route('/auth', method='GET')
 def auth():
     ingress = request.get_header('X-LDAP-AUTH-INGRESS')
-    if ingress in cfg.ignored_ingress:
+    if ingress in cfg.ignored_addresses:
         return ''
 
     cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)

@@ -40,6 +40,30 @@ CONFIG_TEMPLATE = {
 }
 
 
+def check_consistency(checked, path=None, template=None):
+    result = []
+    if template is None:
+        template = CONFIG_TEMPLATE
+
+    path = path or []
+    checked_keys = checked.keys()
+    template_keys = template.keys()
+
+    for key in template_keys:
+        if key not in checked_keys:
+            path.append(key)
+            result.append('.'.join(path))
+            return False
+
+        node = template[key]
+        if isinstance(node, dict):
+            inner_result = check_consistency(
+                checked[key], path + [key], template=node)
+            result += inner_result
+
+    return result
+
+
 class Config(object):
     def __init__(self, config_data):
         self._config_dict = json.loads(config_data)
@@ -71,28 +95,8 @@ class Config(object):
 
         self.ignored_addresses = ingress.get('ignored_addresses', None)
 
-    def check_consistency(self, path=None, template=None):
-        result = []
-        if template is None:
-            template = CONFIG_TEMPLATE
-
-        path = path or []
-        checked_keys = self._config_dict.keys()
-        template_keys = template.keys()
-
-        for key in template_keys:
-            if key not in checked_keys:
-                path.append(key)
-                result.append('.'.join(path))
-                return False
-
-            node = template[key]
-            if isinstance(node, dict):
-                inner_result = Config.check_consistency(
-                    self._config_dict[key], path + [key], template=node)
-                result += inner_result
-
-        return result
+    def check_consistency(self):
+        return check_consistency(self._config_dict, template=CONFIG_TEMPLATE)
 
     @staticmethod
     def get_sample_config(indent):
