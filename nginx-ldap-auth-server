@@ -2,9 +2,6 @@
 import base64
 import hashlib
 import hmac
-import json
-import string
-import random
 import time
 from collections import namedtuple
 from contextlib import contextmanager
@@ -13,66 +10,28 @@ from datetime import datetime
 from datetime import timedelta
 from urllib.parse import urlparse
 
-from bottle import abort, redirect, request, response, route, run, \
-    static_file, template
+from bottle import (
+    abort, redirect, request, response, route, run, static_file, template)
 import click
 import ldap
 
-
-DEFAULT_CONFIG_FILE = 'config.json'
-DEFAULT_SECRET_LENGTH = 32
-DEFAULT_SESSION_EXPIRATION = 86400  # session lasts 1 day by default
-GROUPS_CACHE_MAX_AGE = 300  # cache user's groups query for 5 minutes
+from config import Config, DEFAULT_CONFIG_FILE
 
 
 Cookie = namedtuple('Cookie', ['data', 'timestamp'])
 GroupsCacheEntry = namedtuple('GroupsCacheEntry', ['entry', 'timestamp'])
 
 
-config = {
-    'ldap': {
-        'host': 'ldap.example.com',
-        'port': 389,
-        'username': 'admin',
-        'password': 'password',
-        'user_attr': 'mail',
-        'user_base_dn': 'ou=users,dc=example,dc=com',
-        'group_base_dn': 'ou=groups,dc=example,dc=com',
-        'group_cache_max_age': GROUPS_CACHE_MAX_AGE,
-    },
-    'session': {
-        'cookie_session': 'EXAMPLE_COM_SSO',
-        'cookie_redirect': 'EXAMPLE_COM_REDIRECT',
-        'cookie_domain': '.example.com',
-        'cookie_secret': ''.join(
-            random.choice(string.ascii_letters + string.digits)
-            for _ in range(DEFAULT_SECRET_LENGTH)),
-        'cookie_max_age': DEFAULT_SESSION_EXPIRATION,
-    },
-    'pages': {
-        'login_template': './pages/templates/login.html.j2',
-        'noauth_template': './pages/templates/noauth.html.j2',
-        'static_root': './pages/static',
-        'fallback_redirect': 'https://internal.example.com',
-    },
-    'ingress': {
-        'ignored_addresses': [],
-    },
-}
-
+cfg = None
 groups_cache = {}
 
 
 @contextmanager
 def ldap_connection():
     # TODO(kbancerz): add SSL support
-    ldap_server = f'ldap://{config["ldap"]["host"]}:{config["ldap"]["port"]}'
-    username = config['ldap']['username']
-    password = config['ldap']['password']
-
-    ldap_client = ldap.initialize(ldap_server)
+    ldap_client = ldap.initialize(f'ldap://{cfg.host}:{cfg.port}')
     try:
-        ldap_client.simple_bind_s(username, password)
+        ldap_client.simple_bind_s(cfg.username, cfg.password)
         yield ldap_client
     except ldap.INVALID_CREDENTIALS:
         click.echo('Wrong admin username/password')
@@ -86,9 +45,9 @@ def ldap_connection():
 
 def ldap_check_authentication(username, password):
     with ldap_connection() as lc:
-        ldap_filter = f'({config["ldap"]["user_attr"]}={username})'
+        query = f'({cfg.user_attr}={username})'
         search_result = lc.search_s(
-            config['ldap']['user_base_dn'], ldap.SCOPE_SUBTREE, ldap_filter)
+            cfg.user_base_dn, ldap.SCOPE_SUBTREE, query)
 
     if not search_result:
         click.echo(f'Incorrect credentials: {username}')
@@ -113,24 +72,20 @@ def ldap_get_group_membership(username):
     # function caches results to make LDAP calls less frequent
     now = int(time.time())
     cache_entry = groups_cache.get(username, None)
-    cache_max_age = config['ldap']['group_cache_max_age']
 
-    if (cache_entry is None) or (cache_entry.timestamp + cache_max_age < now):
+    if ((cache_entry is None) or
+            (cache_entry.timestamp + cfg.group_cache_max_age < now)):
         with ldap_connection() as lc:
-            user_base_dn = config['ldap']['user_base_dn']
-            group_base_dn = config['ldap']['group_base_dn']
-
             # get user's DN
-            ldap_filter = f'({config["ldap"]["user_attr"]}={username})'
-            result = lc.search_s(
-                user_base_dn, ldap.SCOPE_SUBTREE, ldap_filter)
+            query = f'({cfg.user_attr}={username})'
+            result = lc.search_s(cfg.user_base_dn, ldap.SCOPE_SUBTREE, query)
             user_dn = result[0][0]
 
             # TODO(kbancerz): parametrize this query
             # find user's groups based on DN
-            ldap_filter = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
+            query = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
             result = lc.search_s(
-                group_base_dn, ldap.SCOPE_SUBTREE, ldap_filter, ['cn', ])
+                cfg.group_base_dn, ldap.SCOPE_SUBTREE, query, ['cn', ])
             groups = {group[0] for group in result}
 
         cache_entry = GroupsCacheEntry(groups, now)
@@ -141,37 +96,33 @@ def ldap_get_group_membership(username):
 
 @route('/static/<filename:path>', method='GET')
 def server_static(filename):
-    return static_file(filename, root=config['pages']['static_root'])
+    return static_file(filename, root=cfg.static_root)
 
 
 @route('/auth', method='GET')
 def auth():
-    ignored_ingress = config['ingress']['ignored_addresses']
     ingress = request.get_header('X-LDAP-AUTH-INGRESS')
-    if ingress in ignored_ingress:
+    if ingress in cfg.ignored_addresses:
         return ''
 
-    cookie_session = config['session']['cookie_session']
-    cookie_secret = config['session']['cookie_secret']
-    cookie_max_age = int(config['session']['cookie_max_age'])
-
-    cookie = request.get_cookie(cookie_session, secret=cookie_secret)
+    cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)
     if not cookie:
         return abort(401, 'Unauthenticated')
 
     username, timestamp = cookie.rsplit(':', 1)
 
-    # if cookie_max_age > 0, then interpret it as absolute number of seconds
-    # to cookie expiration, otherwise interpret as a number of full days,
-    # before expiring at midnight, e.g.:
+    # if cfg.cookie_max_age > 0, then interpret it as absolute number of
+    # seconds to cookie expiration, otherwise interpret as a number of full
+    # days, before expiring at midnight, e.g.:
     #  -> 0 means today at 23:59:59
     #  -> -1 means tomorrow at 23:59:59
-    if cookie_max_age > 0:
-        expiration = int(timestamp) + cookie_max_age
+    if cfg.cookie_max_age > 0:
+        expiration = int(timestamp) + cfg.cookie_max_age
     else:
         midnight = datetime.combine(
             date.fromtimestamp(int(timestamp)), datetime.max.time())
-        expiration = (midnight + timedelta(days=-cookie_max_age)).timestamp()
+        expiration = \
+            (midnight + timedelta(days=-cfg.cookie_max_age)).timestamp()
 
     if int(expiration) < int(time.time()):
         return abort(401, 'Unauthenticated')
@@ -202,96 +153,60 @@ def auth():
 
 @route('/', method=('GET', 'POST'))
 def login():
-    template_file = config['pages']['login_template']
-
     if request.method == 'GET':
-        return template(template_file)
+        return template(cfg.login_template)
 
     username = request.forms.get('username')
     password = request.forms.get('password')
     if not ldap_check_authentication(username, password):
         return template(
-            template_file,
+            cfg.login_template,
             error_msg='Incorrect username or password!',
             username=username)
-
-    cookie_session = config['session']['cookie_session']
-    cookie_redirect = config['session']['cookie_redirect']
-    cookie_secret = config['session']['cookie_secret']
-    cookie_max_age = int(config['session']['cookie_max_age'])
-    cookie_domain = config['session']['cookie_domain']
-    fallback_redirect = config['pages']['fallback_redirect']
 
     now = int(time.time())
     cookie_data = f'{username}:{now}'
 
     # set expiration as described in auth function
-    if cookie_max_age > 0:
-        max_age = cookie_max_age
+    if cfg.cookie_max_age > 0:
+        max_age = cfg.cookie_max_age
     else:
-        exp_date = date.today() + timedelta(days=-cookie_max_age)
+        exp_date = date.today() + timedelta(days=-cfg.cookie_max_age)
         exp_ts = datetime.combine(exp_date, datetime.max.time()).timestamp()
         max_age = int(exp_ts) - int(now)
 
     response.set_cookie(
-        cookie_session, cookie_data, secret=cookie_secret,
-        max_age=max_age, domain=cookie_domain, path='/', httponly=True)
+        cfg.cookie_session, cookie_data, secret=cfg.cookie_secret,
+        max_age=max_age, domain=cfg.cookie_domain, path='/', httponly=True)
 
-    next_url = request.cookies.get(cookie_redirect) or fallback_redirect
-    response.delete_cookie(cookie_redirect, domain=cookie_domain, path='/')
+    next_url = request.cookies.get(cfg.cookie_redirect)
+    response.delete_cookie(
+        cfg.cookie_redirect, domain=cfg.cookie_domain, path='/')
 
-    return redirect(next_url)
+    return redirect(next_url or cfg.fallback_redirect)
 
 
 @route('/logout', method=('GET', 'POST'))
 def logout():
-    cookie_session = config['session']['cookie_session']
-    cookie_domain = config['session']['cookie_domain']
-    response.delete_cookie(cookie_session, domain=cookie_domain, path='/')
-
+    response.delete_cookie(
+        cfg.cookie_session, domain=cfg.cookie_domain, path='/')
     return redirect('/')
 
 
 @route('/noauth', method='GET')
 def no_authorization():
-    cookie_session = config['session']['cookie_session']
-    cookie_secret = config['session']['cookie_secret']
-    cookie_redirect = config['session']['cookie_redirect']
-    cookie = request.get_cookie(cookie_session, secret=cookie_secret)
+    cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)
 
     user = cookie.split(':', 2)[0] if cookie else None
-    redirection = request.get_cookie(cookie_redirect)
+    redirection = request.get_cookie(cfg.cookie_redirect)
     if redirection:
         parsed = urlparse(redirection)
         host = parsed.netloc
     else:
         host = None
 
-    noauth_template = config['pages']['noauth_template']
-    fallback_redirect = config['pages']['fallback_redirect']
-
     return template(
-        noauth_template, host=host, user=user, home=fallback_redirect)
-
-
-def check_consistency(template, checked, path=None):
-    global config
-    path = path or []
-    checked_keys = checked.keys()
-    template_keys = template.keys()
-
-    for key in template_keys:
-        if key not in checked_keys:
-            path.append(key)
-            click.echo(f'Missing {".".join(path)}')
-            return False
-
-        value = template[key]
-        if (isinstance(value, dict) and
-                not check_consistency(value, checked[key], path + [key])):
-            return False
-
-    return True
+        cfg.noauth_template, host=host, user=user, home=cfg.fallback_redirect)
 
 
 @click.group()
@@ -313,9 +228,7 @@ def get_sample_config(ctx, json_indent):
     """
     Create a sample server configuration file
     """
-    global config
-
-    config_json = json.dumps(config, indent=json_indent)
+    config_json = Config.get_sample_config(indent=json_indent)
 
     config_file = ctx.obj['config_file']
     if config_file:
@@ -333,17 +246,17 @@ def run_server(ctx, host, port):
     """
     Run nginx LDAP Authentication Server
     """
-    global config
+    global cfg
 
     config_file = ctx.obj['config_file'] or DEFAULT_CONFIG_FILE
     with open(config_file, 'r') as f:
-        loaded_config = json.load(f)
+        cfg = Config(f.read())
 
-    if not check_consistency(config, loaded_config):
-        click.echo('Incorrect config loaded!')
+    missing_config_nodes = cfg.check_consistency()
+    if missing_config_nodes:
+        click.echo(f'Missing configuration nodes: {missing_config_nodes}')
         exit(1)
 
-    config = loaded_config
     run(host=host, port=port)
 
 
