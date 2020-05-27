@@ -10,8 +10,8 @@ from datetime import datetime
 from datetime import timedelta
 from urllib.parse import urlparse
 
-from bottle import abort, redirect, request, response, route, run, \
-    static_file, template
+from bottle import (
+    abort, redirect, request, response, route, run, static_file, template)
 import click
 import ldap
 
@@ -28,8 +28,6 @@ groups_cache = {}
 
 @contextmanager
 def ldap_connection():
-    global cfg
-
     # TODO(kbancerz): add SSL support
     ldap_client = ldap.initialize(f'ldap://{cfg.host}:{cfg.port}')
     try:
@@ -46,12 +44,10 @@ def ldap_connection():
 
 
 def ldap_check_authentication(username, password):
-    global cfg
-
     with ldap_connection() as lc:
-        ldap_filter = f'({cfg.user_attr}={username})'
+        query = f'({cfg.user_attr}={username})'
         search_result = lc.search_s(
-            cfg.user_base_dn, ldap.SCOPE_SUBTREE, ldap_filter)
+            cfg.user_base_dn, ldap.SCOPE_SUBTREE, query)
 
     if not search_result:
         click.echo(f'Incorrect credentials: {username}')
@@ -73,8 +69,6 @@ def ldap_check_authentication(username, password):
 
 
 def ldap_get_group_membership(username):
-    global cfg
-
     # function caches results to make LDAP calls less frequent
     now = int(time.time())
     cache_entry = groups_cache.get(username, None)
@@ -83,16 +77,15 @@ def ldap_get_group_membership(username):
             (cache_entry.timestamp + cfg.group_cache_max_age < now)):
         with ldap_connection() as lc:
             # get user's DN
-            lc_filter = f'({cfg.user_attr}={username})'
-            result = lc.search_s(
-                cfg.user_base_dn, ldap.SCOPE_SUBTREE, lc_filter)
+            query = f'({cfg.user_attr}={username})'
+            result = lc.search_s(cfg.user_base_dn, ldap.SCOPE_SUBTREE, query)
             user_dn = result[0][0]
 
             # TODO(kbancerz): parametrize this query
             # find user's groups based on DN
-            lc_filter = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
+            query = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
             result = lc.search_s(
-                cfg.group_base_dn, ldap.SCOPE_SUBTREE, lc_filter, ['cn', ])
+                cfg.group_base_dn, ldap.SCOPE_SUBTREE, query, ['cn', ])
             groups = {group[0] for group in result}
 
         cache_entry = GroupsCacheEntry(groups, now)
@@ -103,14 +96,11 @@ def ldap_get_group_membership(username):
 
 @route('/static/<filename:path>', method='GET')
 def server_static(filename):
-    global cfg
     return static_file(filename, root=cfg.static_root)
 
 
 @route('/auth', method='GET')
 def auth():
-    global cfg
-
     ingress = request.get_header('X-LDAP-AUTH-INGRESS')
     if ingress in cfg.ignored_ingress:
         return ''
@@ -161,8 +151,6 @@ def auth():
 
 @route('/', method=('GET', 'POST'))
 def login():
-    global cfg
-
     if request.method == 'GET':
         return template(cfg.login_template)
 
@@ -198,8 +186,6 @@ def login():
 
 @route('/logout', method=('GET', 'POST'))
 def logout():
-    global cfg
-
     response.delete_cookie(
         cfg.cookie_session, domain=cfg.cookie_domain, path='/')
     return redirect('/')
@@ -207,8 +193,6 @@ def logout():
 
 @route('/noauth', method='GET')
 def no_authorization():
-    global cfg
-
     cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)
 
     user = cookie.split(':', 2)[0] if cookie else None
@@ -220,8 +204,7 @@ def no_authorization():
         host = None
 
     return template(
-        cfg.noauth_template, host=host, user=user,
-        home=cfg.fallback_redirect)
+        cfg.noauth_template, host=host, user=user, home=cfg.fallback_redirect)
 
 
 @click.group()
