@@ -9,7 +9,18 @@ DEFAULT_SESSION_EXPIRATION = 86400  # session lasts 1 day by default
 GROUPS_CACHE_MAX_AGE = 300  # cache user's groups query for 5 minutes
 
 CONFIG_TEMPLATE = {
+    'basic_authentication': {
+        'enabled': False,
+        'users': {
+            'sample_user': {
+                'password': '/HDrxmQBj6Xl7/gl6UwrcZKq7fjjH1knVUAxwX0v/'
+                            'Yvb3zHET3+lfZ+tpAN/nYGp',  # welcome
+                'groups': ['TestGroup'],
+            }
+        }
+    },
     'ldap': {
+        'enabled': True,
         'host': 'ldap.example.com',
         'port': 389,
         'username': 'admin',
@@ -68,11 +79,16 @@ class Config(object):
     def __init__(self, config_data):
         self._config_dict = json.loads(config_data)
 
+        basic = self._config_dict.get('basic_authentication', {})
         ldap = self._config_dict.get('ldap', {})
         session = self._config_dict.get('session', {})
         pages = self._config_dict.get('pages', {})
         ingress = self._config_dict.get('ingress', {})
 
+        self.basic_enabled = basic.get('enabled', False)
+        self.basic_users = basic.get('users', None)
+
+        self.ldap_enabled = ldap.get('enabled', False)
         self.host = ldap.get('host', None)
         self.port = ldap.get('port', None)
         self.username = ldap.get('username', None)
