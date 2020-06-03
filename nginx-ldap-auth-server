@@ -301,11 +301,6 @@ def run_server(ctx, host, port):
     with open(config_file, 'r') as f:
         cfg = Config(f.read())
 
-    missing_config_nodes = cfg.check_consistency()
-    if missing_config_nodes:
-        click.echo(f'Missing configuration nodes: {missing_config_nodes}')
-        exit(1)
-
     run(host=host, port=port)
 
 
