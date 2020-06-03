@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import os
 import time
 from collections import namedtuple
 from contextlib import contextmanager
@@ -18,12 +19,40 @@ import ldap
 from config import Config, DEFAULT_CONFIG_FILE
 
 
+SALT_LENGTH = 16
+HASH_ALGORITHM = 'sha256'
+PBKDF2_ITER = 100000
+
+
 Cookie = namedtuple('Cookie', ['data', 'timestamp'])
 GroupsCacheEntry = namedtuple('GroupsCacheEntry', ['entry', 'timestamp'])
 
 
 cfg = None
 groups_cache = {}
+
+
+def basic_check_auth(username, password):
+    if not cfg.basic_enabled:
+        return False
+
+    pw_hash_salt = cfg.basic_users.get(username, {}).get('password', '')
+    pw_hash_salt = base64.b64decode(pw_hash_salt)
+    pw_salt = pw_hash_salt[:SALT_LENGTH]
+    pw_hash = pw_hash_salt[SALT_LENGTH:]
+
+    return hmac.compare_digest(
+        pw_hash,
+        hashlib.pbkdf2_hmac(
+            HASH_ALGORITHM, password.encode(), pw_salt, PBKDF2_ITER)
+    )
+
+
+def basic_get_user_groups(username):
+    if not cfg.basic_enabled:
+        return []
+
+    return cfg.basic_users.get(username, {}).get('groups', [])
 
 
 @contextmanager
@@ -43,7 +72,10 @@ def ldap_connection():
         ldap_client.unbind()
 
 
-def ldap_check_authentication(username, password):
+def ldap_check_auth(username, password):
+    if not cfg.ldap_enabled:
+        return False
+
     with ldap_connection() as lc:
         query = f'({cfg.user_attr}={username})'
         search_result = lc.search_s(
@@ -68,7 +100,10 @@ def ldap_check_authentication(username, password):
     return True
 
 
-def ldap_get_group_membership(username):
+def ldap_get_user_groups(username):
+    if not cfg.ldap_enabled:
+        return []
+
     # function caches results to make LDAP calls less frequent
     now = int(time.time())
     cache_entry = groups_cache.get(username, None)
@@ -102,14 +137,14 @@ def server_static(filename):
 @route('/auth', method='GET')
 def auth():
     ingress = request.get_header('X-LDAP-AUTH-INGRESS')
-    if ingress in cfg.ignored_addresses:
+    if any((ignored in ingress) for ignored in cfg.ignored_addresses):
         return ''
 
     cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)
     if not cookie:
         return abort(401, 'Unauthenticated')
 
-    username, timestamp = cookie.rsplit(':', 1)
+    user, timestamp = cookie.rsplit(':', 1)
 
     # if cfg.cookie_max_age > 0, then interpret it as absolute number of
     # seconds to cookie expiration, otherwise interpret as a number of full
@@ -139,12 +174,12 @@ def auth():
 
     if hdr_allowed_users:
         allowed_users = {x.strip() for x in hdr_allowed_users.split(';')}
-        if username in allowed_users:
+        if user in allowed_users:
             return ''
 
     if hdr_allowed_groups:
         allowed_groups = {x.strip() for x in hdr_allowed_groups.split(';')}
-        user_groups = ldap_get_group_membership(username)
+        user_groups = basic_get_user_groups(user) + ldap_get_user_groups(user)
         if allowed_groups.intersection(user_groups):
             return ''
 
@@ -156,16 +191,16 @@ def login():
     if request.method == 'GET':
         return template(cfg.login_template)
 
-    username = request.forms.get('username')
-    password = request.forms.get('password')
-    if not ldap_check_authentication(username, password):
+    user = request.forms.get('username')
+    passwd = request.forms.get('password')
+    if not (basic_check_auth(user, passwd) or ldap_check_auth(user, passwd)):
         return template(
             cfg.login_template,
             error_msg='Incorrect username or password!',
-            username=username)
+            username=user)
 
     now = int(time.time())
-    cookie_data = f'{username}:{now}'
+    cookie_data = f'{user}:{now}'
 
     # set expiration as described in auth function
     if cfg.cookie_max_age > 0:
@@ -239,6 +274,20 @@ def get_sample_config(ctx, json_indent):
 
 
 @nginx_ldap_auth.command()
+@click.option('--password', prompt=True, hide_input=True,
+              confirmation_prompt=True)
+@click.pass_context
+def get_password_hash(ctx, password):
+    """
+    Get password hash for basic authentication
+    """
+    salt = os.urandom(SALT_LENGTH)
+    pw_hash = hashlib.pbkdf2_hmac(
+        HASH_ALGORITHM, password.encode(), salt, PBKDF2_ITER)
+    click.echo(base64.b64encode(salt + pw_hash))
+
+
+@nginx_ldap_auth.command()
 @click.option('--host', default='0.0.0.0', type=str, help='HTTP host')
 @click.option('--port', default=8088, type=int, help='HTTP port to open')
 @click.pass_context
@@ -252,10 +301,8 @@ def run_server(ctx, host, port):
     with open(config_file, 'r') as f:
         cfg = Config(f.read())
 
-    missing_config_nodes = cfg.check_consistency()
-    if missing_config_nodes:
-        click.echo(f'Missing configuration nodes: {missing_config_nodes}')
-        exit(1)
+    for parameter in cfg.check_consistency():
+        click.echo(f'Warning: check parameter "{parameter}" value')
 
     run(host=host, port=port)
 
