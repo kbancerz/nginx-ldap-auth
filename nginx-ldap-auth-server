@@ -301,6 +301,9 @@ def run_server(ctx, host, port):
     with open(config_file, 'r') as f:
         cfg = Config(f.read())
 
+    for parameter in cfg.check_consistency():
+        click.echo(f'Warning: check parameter "{parameter}" value')
+
     run(host=host, port=port)
 
 
