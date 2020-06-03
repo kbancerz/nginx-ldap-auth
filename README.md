@@ -69,8 +69,9 @@ Server requires configuration file to be maintained. It is divided into several 
 * **static_root** (e.g. _"./pages/static"_) - path to static files root folder
 * **fallback_redirect** (e.g. _"https://internal.example.com"_) - redirection fallback address - if redirection cookie is not set (e.g. login page was accessed directly), a user will be redirected to this address after successfully logging in
 
-#### Ingress
-* **ignored_addresses** (e.g. _["192.168.0.1"]_) - list of source hosts, for which authentication should not be checked (e.g. when accessed from within an internal network/VPN/etc.)
+#### Passthrough
+* **ignored_ingress** (e.g. _["192.168.0.1"]_) - list of ingress addresses (server side), for which authentication should not be checked (e.g. when accessed from within an internal network/VPN/etc.)
+* **ignored_remote** (e.g. _["192.168.100."]_) - list of remote hosts (client side), for which authentication should not be checked (e.g. when accessed from within an internal network/VPN/etc.)
 
 nginx Configuration
 ----
@@ -93,6 +94,7 @@ location /__auth {
         proxy_set_header   X-LDAP-AUTH-USERS $ldap_allowed_users;
         proxy_set_header   X-LDAP-AUTH-GROUPS $ldap_allowed_groups;
         proxy_set_header   X-LDAP-AUTH-INGRESS $server_addr;
+        proxy_set_header   X-LDAP-AUTH-REMOTE $remote_addr;
 
         proxy_cache auth;
         proxy_cache_valid 200 1m;

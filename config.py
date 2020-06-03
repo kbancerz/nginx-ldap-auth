@@ -45,8 +45,9 @@ CONFIG_TEMPLATE = {
         'static_root': './pages/static',
         'fallback_redirect': 'https://internal.example.com',
     },
-    'ingress': {
-        'ignored_addresses': [],
+    'passthrough': {
+        'ignored_ingress': [],
+        'ignored_remote': [],
     },
 }
 
@@ -59,7 +60,7 @@ class Config(object):
         ldap = self._config_dict.get('ldap', {})
         session = self._config_dict.get('session', {})
         pages = self._config_dict.get('pages', {})
-        ingress = self._config_dict.get('ingress', {})
+        passthrough = self._config_dict.get('passthrough', {})
 
         self.basic_enabled = basic.get('enabled', False)
         self.basic_users = basic.get('users', {})
@@ -85,7 +86,8 @@ class Config(object):
         self.static_root = pages.get('static_root', None)
         self.fallback_redirect = pages.get('fallback_redirect', None)
 
-        self.ignored_addresses = ingress.get('ignored_addresses', None)
+        self.ignored_ingress = passthrough.get('ignored_ingress', [])
+        self.ignored_remote = passthrough.get('ignored_remote', [])
 
     def check_consistency(self):
         invalid = []

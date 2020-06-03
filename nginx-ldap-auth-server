@@ -137,7 +137,11 @@ def server_static(filename):
 @route('/auth', method='GET')
 def auth():
     ingress = request.get_header('X-LDAP-AUTH-INGRESS')
-    if any((ignored in ingress) for ignored in cfg.ignored_addresses):
+    if any((ignored in ingress) for ignored in cfg.ignored_ingress):
+        return ''
+
+    remote = request.get_header('X-LDAP-AUTH-REMOTE')
+    if any((ignored in remote) for ignored in cfg.ignored_remote):
         return ''
 
     cookie = request.get_cookie(cfg.cookie_session, secret=cfg.cookie_secret)
