@@ -121,7 +121,7 @@ def ldap_get_user_groups(username):
             query = f'(|(&(objectClass=*)(uniqueMember={user_dn})))'
             result = lc.search_s(
                 cfg.group_base_dn, ldap.SCOPE_SUBTREE, query, ['cn', ])
-            groups = {group[0] for group in result}
+            groups = list({group[0] for group in result})
 
         cache_entry = GroupsCacheEntry(groups, now)
         groups_cache[username] = cache_entry
